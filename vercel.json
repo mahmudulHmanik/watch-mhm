@@ -6,10 +6,13 @@
       "includeFiles": "{config.json,index.json}"
     }
   },
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "/api"
+      "src": "/api/(.*)",
+      "dest": "/api/index.js"
+    },
+    {
+      "handle": "filesystem"
     }
   ]
 }
