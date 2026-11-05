@@ -1,7 +1,9 @@
 // DhakaFlix Browser: crawler + fuzzy search + proxy/streaming. Run on a machine inside your BDIX network.
 const express = require('express'), cheerio = require('cheerio'), Fuse = require('fuse.js');
-const fs = require('fs'), { spawn } = require('child_process'), { Readable } = require('stream');
-const cfg = require('./config.json'), PORT = process.env.PORT || 3000, IDX = 'index.json';
+const fs = require('fs'), path = require('path'), { spawn } = require('child_process'), { Readable } = require('stream');
+const cfg = require('./config.json'), PORT = process.env.PORT || 3000;
+const IS_VERCEL = Boolean(process.env.VERCEL), IDX = path.join(__dirname, 'index.json');
+const CACHE_DIR = IS_VERCEL ? path.join('/tmp', 'dhakaflix-cache') : path.join(__dirname, 'cache');
 const hosts = new Set(cfg.sections.map(s => new URL(s.url).host));
 const allowed = u => { try { const x = new URL(u); return x.protocol === 'http:' && hosts.has(x.host); } catch { return false; } };
 let items = [], fuse = null, crawling = false;
@@ -58,7 +60,11 @@ async function crawl(only = []) { // only = names of collections to rescan; empt
     try { await walk(s.url, s, all, 0); console.log('indexed', s.name, all.length); if (first) { items = all.slice(); build(); } }
     catch (e) { console.error('failed', s.name, e.message); }
   }
-  if (all.length) { const done = new Set(all.map(i => i.section)); items = items.filter(i => !done.has(i.section)).concat(all); fs.writeFileSync(IDX, JSON.stringify({ version: INDEX_VERSION, items })); build(); }
+  if (all.length) {
+    const done = new Set(all.map(i => i.section)); items = items.filter(i => !done.has(i.section)).concat(all);
+    if (!IS_VERCEL) fs.writeFileSync(IDX, JSON.stringify({ version: INDEX_VERSION, items }));
+    build();
+  }
   crawling = false;
 }
 const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/['\u2019"!^$|=]/g, '').replace(/[-_.:,&()\[\]]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -76,9 +82,12 @@ if (fs.existsSync(IDX)) {
   if (Array.isArray(j) || j.version !== INDEX_VERSION) { console.log('Library index is from an older version. Rescanning in the background (the app stays usable).'); crawl(); }
 } else crawl();
 
-const app = express(); app.use(express.static('public'));
+const app = express(); app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/status', (_, r) => r.json({ crawling, total: items.length }));
-app.post('/api/crawl', (q, r) => { crawl([].concat(q.query.section || [])); r.json({ started: true }); }); // ?section=Name (repeatable) rescans only those
+app.post('/api/crawl', (q, r) => {
+  if (IS_VERCEL) return r.status(501).json({ error: 'Rescanning is unavailable on Vercel.' });
+  crawl([].concat(q.query.section || [])); r.json({ started: true });
+}); // ?section=Name (repeatable) rescans only those
 app.get('/api/sections', (_, r) => r.json(cfg.sections.map(s => ({ name: s.name, type: s.type, count: items.filter(i => i.section === s.name).length }))));
 const sorted = (l, by) => [...l].sort((a, b) => by === 'title' ? a.title.localeCompare(b.title)
   : by === 'yearAsc' ? (a.year || '9999').localeCompare(b.year || '9999') || a.title.localeCompare(b.title) : (b.year || '0').localeCompare(a.year || '0') || a.title.localeCompare(b.title));
@@ -128,7 +137,7 @@ app.get('/transcode', (q, r) => { // needs ffmpeg. mode=audio keeps video, conve
   r.set('Content-Type', 'video/mp4'); p.stdout.pipe(r); p.on('error', () => r.end()); q.on('close', () => p.kill('SIGKILL'));
 });
 // ---- audio/subtitle tracks: ffprobe + WebVTT extraction (ffprobe ships with ffmpeg) ----
-const crypto = require('crypto'); fs.mkdirSync('cache', { recursive: true });
+const crypto = require('crypto'); fs.mkdirSync(CACHE_DIR, { recursive: true });
 const run = (cmd, args) => new Promise((res, rej) => {
   const p = spawn(cmd, args), b = [];
   p.stdout.on('data', d => b.push(d)); p.on('error', rej);
@@ -156,7 +165,7 @@ app.get('/api/probe', async (q, r) => {
 });
 app.get('/api/sub', async (q, r) => { // WebVTT from an embedded track (s=index) or a subtitle file (file=1); shift= seconds to subtract
   const u = q.query.u; if (!allowed(u)) return r.sendStatus(400);
-  const emb = q.query.file ? null : +q.query.s || 0, key = 'cache/' + crypto.createHash('md5').update(u + '|' + emb).digest('hex') + '.vtt';
+  const emb = q.query.file ? null : +q.query.s || 0, key = path.join(CACHE_DIR, crypto.createHash('md5').update(u + '|' + emb).digest('hex') + '.vtt');
   try {
     if (!fs.existsSync(key)) {
       if (!subJobs.has(key)) subJobs.set(key, run(cfg.ffmpeg || 'ffmpeg', ['-loglevel', 'error', '-i', u, ...(emb === null ? [] : ['-map', '0:s:' + emb]), '-f', 'webvtt', 'pipe:1'])
@@ -218,4 +227,5 @@ app.get('/api/m3u', (q, r) => { // opens in VLC / mpv / any player
   r.set('Content-Type', 'audio/x-mpegurl'); r.set('Content-Disposition', `attachment; filename="${name}.m3u"`);
   r.send(`#EXTM3U\n#EXTINF:-1,${name}\nhttp://${q.headers.host}/stream?u=${encodeURIComponent(q.query.u)}\n`);
 });
-app.listen(PORT, '0.0.0.0', () => console.log('DhakaFlix Browser on http://localhost:' + PORT));
+if (require.main === module) app.listen(PORT, '0.0.0.0', () => console.log('DhakaFlix Browser on http://localhost:' + PORT));
+module.exports = app;

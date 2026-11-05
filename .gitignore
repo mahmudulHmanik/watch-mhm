@@ -1,8 +1,10 @@
 # Dependencies
 node_modules/
 
-# Generated application data
-index.json
+# Bundled catalog used by the Vercel deployment
+!index.json
+
+# Local generated cache
 cache/
 
 # Local environment and secrets
