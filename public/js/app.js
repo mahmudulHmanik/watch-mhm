@@ -82,8 +82,12 @@
       }).filter(x => x.name && x.name !== '..' && x.name !== 'Parent Directory')
     }
     async function directPlaylist(u) {
-      const r = await fetch('/api/playlist?u=' + enc(u)); if (!r.ok) throw new Error('playlist ' + r.status);
-      return r.json()
+      const item = catalog.find(x => x.url === u);
+      if (!item || !item.files) throw new Error('This title has not been enriched yet.');
+      const groups = Object.entries(item.files.reduce((m, x) => {
+        (m[x.group || ''] ||= []).push({ name: x.name, url: x.url, size: x.size, subs: x.subs || [] }); return m
+      }, {})).map(([name, videos]) => ({ name, videos }));
+      return { groups: groups.filter(g => g.videos.length) }
     }
     function route() {
       const q = new URLSearchParams(location.hash.slice(1)), u = q.get('w'); stop(); wtok++; closeNav();
