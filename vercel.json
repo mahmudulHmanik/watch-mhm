@@ -1,9 +1,3 @@
 {
-  "version": 2,
-  "functions": {
-    "api/*.js": {
-      "runtime": "nodejs20.x",
-      "includeFiles": "{config.json,public/index.json}"
-    }
-  }
+  "version": 2
 }
