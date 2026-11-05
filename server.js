@@ -16,16 +16,23 @@ async function ls(url) { // parse an h5ai directory page
   });
   return out;
 }
-const GROUP = /^\(\d{4}(-\d{4})?\)(\s.*)?$|^\d{4}(\s+&\s+Before)?$|\s[^\w\s]\s+\S+\s+\u2014\s+\S+\s*$/i; // year folders "(2024)", "(1996) 1080p", "2001", and A-Z buckets "TV Series * A - F": descend, don't list
-function mk(d, s) {
-  const year = (d.name.match(/\((?:TV (?:Mini )?Series )?(\d{4})/) || [])[1] || '';
+const GROUP = /^(?:\(\d{4}(?:-\d{4})?\)(?:\s.*)?|\d{4}(?:\s+&\s+Before)?$|.*\s[^\w\s]\s+\S+\s+\u2014\s+\S+\s*)$/i; // year folders and A-Z buckets: descend, don't list
+const GROUP_YEAR = /^(?:\((?:TV (?:Mini )?Series )?(\d{4})(?:-\d{4})?\)|(\d{4})(?:\s+&\s+Before)?)(?:\s|$)/i;
+function groupYear(name) {
+  const m = name.match(GROUP_YEAR);
+  return m ? m[1] || m[2] || '' : '';
+}
+function mk(d, s, yearHint = '') {
+  const year = ((d.name.match(/\((?:[^)]*?\s)?((?:19|20)\d{2})\b/) || [])[1]
+    || (d.name.match(/(?:^|[^\d])((?:19|20)\d{2})(?=[^\d]|$)/) || [])[1]
+    || yearHint);
   const title = d.name.replace(/\s*\((?:TV (?:Mini )?Series )?\d{4}.*$/, '').replace(/\s*\b(2160p|1080p|720p|480p)\b.*$/i, '').trim() || d.name;
   return {
     title, year, quality: (d.name.match(/2160p|1080p|720p|480p/i) || [''])[0], dual: /dual audio/i.test(d.name),
     section: s.name, type: s.type, url: d.url, date: d.date, search: (title + ' ' + year).replace(/[-_.:]/g, ' ').toLowerCase()
   };
 }
-const INDEX_VERSION = 3, TITLE_FILE = /\.(mkv|mp4|m4v|avi|webm|mov|ts|jpe?g|png|webp|nfo)$/i, SEASONY = /^(season|series|s)\s*\.?\s*\d+|^specials?$|^extras?$/i;
+const INDEX_VERSION = 4, TITLE_FILE = /\.(mkv|mp4|m4v|avi|webm|mov|ts|jpe?g|png|webp|nfo)$/i, SEASONY = /^(season|series|s)\s*\.?\s*\d+|^specials?$|^extras?$/i;
 async function looksLikeGroups(dirs) { // sample first / middle / last folder: if none holds video or poster files (or season folders), this level only groups other folders
   let sawDirs = false;
   for (const d of [...new Set([0, Math.floor(dirs.length / 2), dirs.length - 1])].map(i => dirs[i])) {
@@ -35,14 +42,14 @@ async function looksLikeGroups(dirs) { // sample first / middle / last folder: i
   }
   return sawDirs;
 }
-async function walk(url, s, all, depth, trace) { // trace(depth, text) is optional and used by /api/inspect
+async function walk(url, s, all, depth, trace, yearHint = '') { // trace(depth, text) is optional and used by /api/inspect
   const dirs = (await ls(url)).filter(x => x.dir), pat = dirs.filter(d => GROUP.test(d.name)), rest = dirs.filter(d => !GROUP.test(d.name)), say = (t) => trace && trace(depth, t);
   if (pat.length) say(`${pat.length} grouping folder(s) by name: ${pat.slice(0, 3).map(d => d.name).join(' | ')}${pat.length > 3 ? ' ...' : ''}`);
-  for (const d of pat) { if (depth < 4) await walk(d.url, s, all, depth + 1, trace); else all.push(mk(d, s)); }
+  for (const d of pat) { if (depth < 4) await walk(d.url, s, all, depth + 1, trace, groupYear(d.name) || yearHint); else all.push(mk(d, s, yearHint)); }
   if (!rest.length) return;
   const groups = depth < 4 && ((depth === 0 && s.groups) || (!pat.length && await looksLikeGroups(rest)));
   say(`${rest.length} folder(s) are ${groups ? 'GROUPS, going deeper' : 'TITLES'}: ${rest.slice(0, 3).map(d => d.name).join(' | ')}${rest.length > 3 ? ' ...' : ''}`);
-  if (groups) for (const d of rest) await walk(d.url, s, all, depth + 1, trace); else rest.forEach(d => all.push(mk(d, s)));
+  if (groups) for (const d of rest) await walk(d.url, s, all, depth + 1, trace, yearHint); else rest.forEach(d => all.push(mk(d, s, yearHint)));
 }
 async function crawl(only = []) { // only = names of collections to rescan; empty = all
   if (crawling) return; crawling = true;
