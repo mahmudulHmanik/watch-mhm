@@ -1,0 +1,20 @@
+{
+  "ffmpeg": "ffmpeg",
+  "sections": [
+    { "name": "English Movies",        "type": "movie",  "url": "http://172.16.50.7/DHAKA-FLIX-7/English%20Movies/" },
+    { "name": "English Movies 1080p",  "type": "movie",  "url": "http://172.16.50.14/DHAKA-FLIX-14/English%20Movies%20%281080p%29/" },
+    { "name": "Hindi Movies",          "type": "movie",  "url": "http://172.16.50.14/DHAKA-FLIX-14/Hindi%20Movies/" },
+    { "name": "South Indian Movies",   "type": "movie",  "url": "http://172.16.50.14/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/South%20Movies/" },
+    { "name": "South Hindi Dubbed",    "type": "movie",  "url": "http://172.16.50.14/DHAKA-FLIX-14/SOUTH%20INDIAN%20MOVIES/Hindi%20Dubbed/" },
+    { "name": "Kolkata Bangla Movies", "type": "movie",  "url": "http://172.16.50.7/DHAKA-FLIX-7/Kolkata%20Bangla%20Movies/" },
+    { "name": "Animation Movies",      "type": "movie",  "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies/" },
+    { "name": "Animation 1080p",       "type": "movie",  "url": "http://172.16.50.14/DHAKA-FLIX-14/Animation%20Movies%20%281080p%29/" },
+    { "name": "Foreign Language",      "type": "movie",  "groups": true, "url": "http://172.16.50.7/DHAKA-FLIX-7/Foreign%20Language%20Movies/" },
+    { "name": "IMDb Top 250",          "type": "movie",  "url": "http://172.16.50.14/DHAKA-FLIX-14/IMDb%20Top-250%20Movies/" },
+    { "name": "3D Movies",             "type": "movie",  "url": "http://172.16.50.7/DHAKA-FLIX-7/3D%20Movies/" },
+    { "name": "TV & Web Series",       "type": "series", "url": "http://172.16.50.12/DHAKA-FLIX-12/TV-WEB-Series/" },
+    { "name": "Korean Series",         "type": "series", "url": "http://172.16.50.14/DHAKA-FLIX-14/KOREAN%20TV%20%26%20WEB%20Series/" },
+    { "name": "Cartoon & Anime",       "type": "series", "url": "http://172.16.50.10/DHAKA-FLIX-10/Anime%20%26%20Cartoon%20TV%20Series/" },
+    { "name": "Documentary",           "type": "series", "url": "http://172.16.50.10/DHAKA-FLIX-10/Documentary/" }
+  ]
+}
