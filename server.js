@@ -2,7 +2,7 @@
 const express = require('express'), cheerio = require('cheerio'), Fuse = require('fuse.js');
 const fs = require('fs'), path = require('path'), { spawn } = require('child_process'), { Readable } = require('stream');
 const cfg = require('./config.json'), PORT = process.env.PORT || 3000;
-const IS_VERCEL = Boolean(process.env.VERCEL), IDX = path.join(__dirname, 'index.json');
+const IS_VERCEL = Boolean(process.env.VERCEL), IDX = path.join(__dirname, 'public', 'index.json');
 const CACHE_DIR = IS_VERCEL ? path.join('/tmp', 'dhakaflix-cache') : path.join(__dirname, 'cache');
 const hosts = new Set(cfg.sections.map(s => new URL(s.url).host));
 const allowed = u => { try { const x = new URL(u); return x.protocol === 'http:' && hosts.has(x.host); } catch { return false; } };

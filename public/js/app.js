@@ -147,15 +147,15 @@
     const OKV = /^(h264|vp8|vp9|av1)$/, OKA = /^(aac|mp3|opus|vorbis)$/, OKC = /\.(mp4|m4v|mov|webm)$/i;
     async function start(x, ext) { // plays directly when the browser can handle the file, otherwise the server converts what is needed
       const c = cur = { url: x.url, mode: 'direct', offset: 0, dur: 0, a: 0, sub: '', ext: ext || [], info: null };
-      $('#cv').checked = false; pl.hidden = false; msg('Preparing...'); fillTracks(); pl.scrollIntoView({ block: 'nearest' });
+      $('#cv').checked = false; pl.hidden = false; msg('Playing original media URL...'); fillTracks(); pl.scrollIntoView({ block: 'nearest' });
+      const t = +lsGet('dfp:' + x.url) || 0; playAt(t);
       const info = await fetch('/api/probe?u=' + enc(x.url)).then(r => r.ok ? r.json() : null).catch(() => null);
-      if (cur !== c) return; c.info = info; msg('');
+      if (cur !== c) return; c.info = info;
       if (info) {
         c.dur = info.duration; const a = info.audio[0];
-        if (!(OKC.test(x.name) && OKV.test(info.video) && (!a || OKA.test(a.codec)))) { c.mode = 'audio'; $('#cv').checked = info.video !== 'h264' }
+        if (!(OKC.test(x.name) && OKV.test(info.video) && (!a || OKA.test(a.codec)))) { c.mode = 'audio'; $('#cv').checked = info.video !== 'h264'; playAt(t) }
       }
-      else msg('Playing the original media URL directly.');
-      fillTracks(); const t = +lsGet('dfp:' + x.url) || 0; playAt(t > 15 && (!c.dur || t < c.dur - 60) ? t : 0);
+      fillTracks(); if (!info) msg('Playing the original media URL. Track details are unavailable.');
     }
     let wd; function watch() { // if a file plays but no sound is decoded, switch to the server-converted stream
       clearTimeout(wd); const c = cur, m = c.mode;

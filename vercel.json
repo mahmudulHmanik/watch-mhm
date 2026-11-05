@@ -3,7 +3,7 @@
   "functions": {
     "api/index.js": {
       "runtime": "nodejs20.x",
-      "includeFiles": "{config.json,index.json}"
+      "includeFiles": "{config.json,public/index.json}"
     }
   },
   "routes": [
