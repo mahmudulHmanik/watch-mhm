@@ -1,18 +1,9 @@
 {
   "version": 2,
   "functions": {
-    "api/index.js": {
+    "api/*.js": {
       "runtime": "nodejs20.x",
       "includeFiles": "{config.json,public/index.json}"
     }
-  },
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/api/index.js"
-    },
-    {
-      "handle": "filesystem"
-    }
-  ]
+  }
 }
