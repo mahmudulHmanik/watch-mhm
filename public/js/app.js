@@ -1,11 +1,25 @@
-    const $ = s => document.querySelector(s), enc = encodeURIComponent; let st = { type: '', section: '', year: '', sort: '', q: '', offset: 0 }, secs = [], lastY = null;
+    const $ = s => document.querySelector(s), enc = encodeURIComponent; let st = { type: '', section: '', year: '', sort: '', q: '', offset: 0 }, secs = [], lastY = null, catalog = [];
     const h = (t, p = {}, ...k) => { const e = Object.assign(document.createElement(t), p); e.append(...k); return e };
     const ic = n => `<svg class="ic"><use href="#i-${n}"/></svg>`;
     const size = s => { const m = /([\d.]+)\s*(KB|MB|GB)/i.exec(s); if (!m) return s; const kb = +m[1] * { KB: 1, MB: 1024, GB: 1048576 }[m[2].toUpperCase()]; return kb >= 1048576 ? (kb / 1048576).toFixed(2) + ' GB' : Math.round(kb / 1024) + ' MB' };
     let seq = 0;
+    const catalogSections = () => Object.values(catalog.reduce((m, x) => {
+      const k = x.section + '\0' + x.type; m[k] = m[k] || { name: x.section, type: x.type, count: 0 }; m[k].count++; return m
+    }, {}));
+    const catalogItems = () => {
+      let list = catalog.filter(x => (!st.type || x.type === st.type) && (!st.section || x.section === st.section) && (!st.year || x.year === st.year));
+      if (st.q) { const q = st.q.toLowerCase().trim(); list = list.filter(x => (x.search || (x.title + ' ' + x.year)).toLowerCase().includes(q)) }
+      if (st.sort === 'title') list.sort((a, b) => a.title.localeCompare(b.title));
+      else if (st.sort === 'yearAsc') list.sort((a, b) => (a.year || '9999').localeCompare(b.year || '9999') || a.title.localeCompare(b.title));
+      else if (st.sort === 'year') list.sort((a, b) => (b.year || '0').localeCompare(a.year || '0') || a.title.localeCompare(b.title));
+      else list.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      return list
+    };
     async function load(reset) {
       const my = ++seq; if (reset) st.offset = 0; let d;
-      try { const r = await fetch('/api/items?' + new URLSearchParams({ ...st, limit: 60 })); if (!r.ok) throw new Error('error ' + r.status); d = await r.json() }
+      try {
+        const list = catalogItems(); d = { total: list.length, items: list.slice(+st.offset, +st.offset + 60) };
+      }
       catch (e) { if (my === seq) { $('#empty').hidden = false; $('#empty').textContent = 'Search failed (' + e.message + '). See the terminal where the app is running.' } return }
       if (my !== seq) return; if (reset) { $('#grid').replaceChildren(); lastY = null }
       for (const it of d.items) {
@@ -14,8 +28,7 @@
       }
       st.offset += d.items.length; $('#more').hidden = st.offset >= d.total; $('#count').textContent = d.total.toLocaleString() + ' titles'; $('#ht').textContent = (st.q ? `Results for “${st.q}”` : st.section || ({ movie: 'Movies', series: 'Series' }[st.type]) || 'Recently added') + (st.year ? ` · ${st.year}` : '');
       const e = $('#empty'); e.hidden = d.total > 0; if (!d.total) {
-        const s = await (await fetch('/api/status')).json();
-        e.textContent = s.crawling ? 'Scanning the servers for the first time. This takes a few minutes. Refresh to see titles as they appear.' : s.total ? 'No titles match. Try fewer letters.' : 'The library is empty. Check that this machine can reach the servers, then press Rescan library.'
+        e.textContent = catalog.length ? 'No titles match. Try fewer letters.' : 'The catalog is empty.'
       }
     }
     const openNav = () => { $('#nav').classList.add('open'); $('#scrim').hidden = false }, closeNav = () => { $('#nav').classList.remove('open'); $('#scrim').hidden = true };
@@ -33,7 +46,8 @@
     document.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { document.querySelectorAll('[data-t]').forEach(x => x.classList.toggle('on', x === b)); toHome(); st.year = ''; st.type = b.dataset.t; st.section = ''; fillSections(); load(true); closeNav() });
     $('#more').onclick = () => load();
     async function loadYears() { // year filter chips for the current type / collection
-      const y = await fetch('/api/years?' + new URLSearchParams({ type: st.type, section: st.section })).then(r => r.json()).catch(() => []), Y = $('#years'); Y.replaceChildren(); if (!y.length) return;
+      const c = {}; catalog.forEach(i => { if (i.year && (!st.type || i.type === st.type) && (!st.section || i.section === st.section)) c[i.year] = (c[i.year] || 0) + 1 });
+      const y = Object.entries(c).map(([year, count]) => ({ year, count })).sort((a, b) => b.year.localeCompare(a.year)), Y = $('#years'); Y.replaceChildren(); if (!y.length) return;
       [{ year: '', count: y.reduce((n, x) => n + x.count, 0) }, ...y].forEach(x => {
         const b = h('button', { type: 'button', className: 'chip' + (st.year === x.year ? ' on' : ''), innerHTML: '<span></span><small></small>', onclick: () => { st.year = x.year; loadYears(); load(true) } });
         b.firstChild.textContent = x.year || 'All years'; b.lastChild.textContent = x.count.toLocaleString(); Y.append(b)
@@ -57,8 +71,23 @@
     const fmt = s => { s = Math.floor(s); const H = Math.floor(s / 3600), M = Math.floor(s % 3600 / 60), S = String(s % 60).padStart(2, '0'); return H ? `${H}:${String(M).padStart(2, '0')}:${S}` : `${M}:${S}` };
     const now = () => cur.offset + v.currentTime;
     const stop = () => { v.pause(); v.removeAttribute('src'); v.load(); pl.hidden = true; $('#seekrow').hidden = true; cur = null };
-    const thumb = it => h('div', { className: 'th' }, h('div', { className: 'ph' }, it.title[0] || '?'), Object.assign(h('img', { loading: 'lazy', alt: '', src: '/api/poster?u=' + enc(it.url) }), { onerror() { this.remove() } }));
+    const thumb = it => h('div', { className: 'th' }, h('div', { className: 'ph' }, it.title[0] || '?'));
     const go = (u, vu) => { location.hash = 'w=' + enc(u) + (vu ? '&v=' + enc(vu) : '') }, toHome = () => { if (location.hash.length > 1) location.hash = '' };
+    async function directDir(u) {
+      const r = await fetch(u); if (!r.ok) throw new Error('directory ' + r.status);
+      const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
+      return [...doc.querySelectorAll('a[href]')].map(a => {
+        const url = new URL(a.getAttribute('href'), u).href, name = decodeURIComponent(a.textContent.trim() || url.split('/').filter(Boolean).pop() || '');
+        return { name, url, dir: a.getAttribute('href').endsWith('/') }
+      }).filter(x => x.name && x.name !== '..' && x.name !== 'Parent Directory')
+    }
+    async function directPlaylist(u) {
+      const root = await directDir(u), dirs = root.filter(x => x.dir), video = x => /\.(mkv|mp4|m4v|avi|webm|mov|ts)$/i.test(x.name);
+      const make = (name, list) => ({ name, videos: list.filter(x => !x.dir && video(x)).map(x => ({ name: x.name, url: x.url, size: '' })) });
+      const groups = [make('', root)];
+      for (const d of dirs) groups.push(make(d.name, await directDir(d.url).catch(() => [])));
+      return { groups: groups.filter(g => g.videos.length) }
+    }
     function route() {
       const q = new URLSearchParams(location.hash.slice(1)), u = q.get('w'); stop(); wtok++; closeNav();
       if (!u) { wv.hidden = true; home.hidden = false; document.title = 'DhakaFlix Browser'; return }
@@ -67,12 +96,12 @@
     addEventListener('hashchange', route);
     async function openWatch(u, vu) {
       const my = ++wtok; show = null; pls = []; pi = -1; $('#plbox').hidden = true; $('#ep').textContent = ''; $('#dtags').replaceChildren(); $('#dt').textContent = 'Loading...'; $('#rel').replaceChildren();
-      const it = known[u] || await fetch('/api/item?u=' + enc(u)).then(r => r.json()).catch(() => null) || { url: u, title: decodeURIComponent(u.split('/').filter(Boolean).pop()), year: '', quality: '', section: '', type: 'movie' };
+      const it = known[u] || catalog.find(x => x.url === u) || { url: u, title: decodeURIComponent(u.split('/').filter(Boolean).pop()), year: '', quality: '', section: '', type: 'movie' };
       if (my !== wtok) return; show = it; document.title = it.title + ' - DhakaFlix Browser';
       $('#dt').textContent = it.title + (it.year ? ` (${it.year})` : '');
       $('#dtags').replaceChildren(...[it.type === 'series' && 'Series', it.quality, it.dual && 'Dual audio', it.section].filter(Boolean).map(t => h('span', { className: 'tag' }, t)));
       related(it, my);
-      const d = await fetch('/api/playlist?u=' + enc(u)).then(r => r.json()).catch(() => null);
+      const d = await directPlaylist(u).catch(() => null);
       if (my !== wtok) return;
       if (!d || !d.groups || !d.groups.length) { pl.hidden = false; msg('No video files found here, or the server could not be reached.'); return }
       d.groups.forEach(g => g.videos.forEach(x => pls.push(x))); renderList(d.groups);
@@ -96,17 +125,16 @@
       $('#ep').textContent = pls.length > 1 && e ? `Season ${+e[1]}, Episode ${+e[2]}` : x.name;
       history.replaceState(null, '', '#w=' + enc(show.url) + '&v=' + enc(x.url)); lsSet('dfl:' + show.url, x.url);
       $('#prev').disabled = i === 0; $('#next').disabled = i === pls.length - 1;
-      $('#dl').href = '/stream?u=' + enc(x.url) + '&dl=1'; $('#m3u').href = `/api/m3u?u=${enc(x.url)}&name=${enc(x.name.replace(/\.[^.]+$/, ''))}`;
+      $('#dl').href = x.url; $('#m3u').href = x.url;
       start(x, x.subs);
     }
     async function related(it, my) {
-      const d = await fetch('/api/items?' + new URLSearchParams({ section: it.section || '', type: it.type || '', limit: 16 })).then(r => r.json()).catch(() => null);
-      if (!d || my !== wtok) return; const R = $('#rel'); R.replaceChildren();
-      d.items.filter(x => x.url !== it.url).slice(0, 12).forEach(x => { known[x.url] = x; R.append(h('button', { className: 'rl', onclick: () => go(x.url) }, thumb(x), h('span', { className: 'tx' }, h('b', {}, x.title), h('small', {}, [x.year, x.quality].filter(Boolean).join(' / '))))) });
+      if (my !== wtok) return; const R = $('#rel'); R.replaceChildren();
+      catalogItems().filter(x => x.url !== it.url).slice(0, 12).forEach(x => { known[x.url] = x; R.append(h('button', { className: 'rl', onclick: () => go(x.url) }, thumb(x), h('span', { className: 'tx' }, h('b', {}, x.title), h('small', {}, [x.year, x.quality].filter(Boolean).join(' / '))))) });
     }
     $('#prev').onclick = () => playIdx(pi - 1); $('#next').onclick = () => playIdx(pi + 1);
     $('#ovlc').onclick = e => pls[pi] && openExt(pls[pi].url, 'vlc', e.currentTarget); $('#ompv').onclick = e => pls[pi] && openExt(pls[pi].url, 'mpv', e.currentTarget);
-    $('#cp').onclick = e => { if (!pls[pi]) return; navigator.clipboard.writeText(location.origin + '/stream?u=' + enc(pls[pi].url)); const sp = e.currentTarget.querySelector('span'); sp.textContent = 'Copied'; setTimeout(() => sp.textContent = 'Copy link', 1500) };
+    $('#cp').onclick = e => { if (!pls[pi]) return; navigator.clipboard.writeText(pls[pi].url); const sp = e.currentTarget.querySelector('span'); sp.textContent = 'Copied'; setTimeout(() => sp.textContent = 'Copy link', 1500) };
     v.onended = () => { if (cur) lsSet('dfp:' + cur.url, 0); if ($('#auto').checked && pi < pls.length - 1) playIdx(pi + 1) };
     setInterval(() => { if (cur && !v.paused && now() > 5) lsSet('dfp:' + cur.url, Math.floor(now())) }, 5000);
     async function openExt(url, player, btn) { // asks the app to launch the player on the computer it runs on
@@ -121,15 +149,15 @@
     }
     const OKV = /^(h264|vp8|vp9|av1)$/, OKA = /^(aac|mp3|opus|vorbis)$/, OKC = /\.(mp4|m4v|mov|webm)$/i;
     async function start(x, ext) { // plays directly when the browser can handle the file, otherwise the server converts what is needed
-      const c = cur = { url: x.url, mode: 'direct', offset: 0, dur: 0, a: 0, sub: '', ext, info: null };
+      const c = cur = { url: x.url, mode: 'direct', offset: 0, dur: 0, a: 0, sub: '', ext: ext || [], info: null };
       $('#cv').checked = false; pl.hidden = false; msg('Preparing...'); fillTracks(); pl.scrollIntoView({ block: 'nearest' });
-      const info = await fetch('/api/probe?u=' + enc(x.url)).then(r => r.ok ? r.json() : null).catch(() => null);
+      const info = null;
       if (cur !== c) return; c.info = info; msg('');
       if (info) {
         c.dur = info.duration; const a = info.audio[0];
         if (!(OKC.test(x.name) && OKV.test(info.video) && (!a || OKA.test(a.codec)))) { c.mode = 'audio'; $('#cv').checked = info.video !== 'h264' }
       }
-      else msg('Could not read the track list (is ffprobe installed?). Playing the file directly.');
+      else msg('Playing the original media URL directly.');
       fillTracks(); const t = +lsGet('dfp:' + x.url) || 0; playAt(t > 15 && (!c.dur || t < c.dur - 60) ? t : 0);
     }
     let wd; function watch() { // if a file plays but no sound is decoded, switch to the server-converted stream
@@ -150,7 +178,7 @@
     }
     function playAt(at) {
       const c = cur, direct = c.mode === 'direct'; c.offset = direct ? 0 : Math.floor(at);
-      v.src = direct ? '/stream?u=' + enc(c.url) : `/transcode?mode=${$('#cv').checked ? 'full' : 'audio'}&a=${c.a}&t=${c.offset}&u=${enc(c.url)}`;
+      v.src = direct ? c.url : `/transcode?mode=${$('#cv').checked ? 'full' : 'audio'}&a=${c.a}&t=${c.offset}&u=${enc(c.url)}`;
       if (direct && at > 1) v.addEventListener('loadedmetadata', () => { v.currentTime = at }, { once: true });
       const bar = !direct && c.dur; $('#seekrow').hidden = !bar; v.controls = !bar; sk.max = c.dur; applySub(); watch(); v.play().catch(() => { });
     }
@@ -177,4 +205,7 @@
     $('#mu').onclick = () => { v.muted = !v.muted; $('#mu').innerHTML = ic(v.muted ? 'mute' : 'vol') };
     $('#vol').oninput = e => { v.volume = +e.target.value; v.muted = false; $('#mu').innerHTML = ic('vol') };
     $('#fs').onclick = () => document.fullscreenElement ? document.exitFullscreen() : $('#stage').requestFullscreen();
-    fetch('/api/sections').then(r => r.json()).then(s => { secs = s; fillSections() }); load(true); route(); poll();
+    fetch('index.json').then(r => r.json()).then(j => {
+      catalog = Array.isArray(j) ? j : j.items || []; secs = catalogSections(); fillSections(); load(true)
+    }).catch(() => { $('#empty').hidden = false; $('#empty').textContent = 'Could not load the catalog.' });
+    route();
