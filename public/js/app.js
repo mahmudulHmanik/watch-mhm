@@ -73,14 +73,6 @@
     const stop = () => { v.pause(); v.removeAttribute('src'); v.load(); pl.hidden = true; $('#seekrow').hidden = true; cur = null };
     const thumb = it => h('div', { className: 'th' }, h('div', { className: 'ph' }, it.title[0] || '?'));
     const go = (u, vu) => { location.hash = 'w=' + enc(u) + (vu ? '&v=' + enc(vu) : '') }, toHome = () => { if (location.hash.length > 1) location.hash = '' };
-    async function directDir(u) {
-      const r = await fetch(u); if (!r.ok) throw new Error('directory ' + r.status);
-      const doc = new DOMParser().parseFromString(await r.text(), 'text/html');
-      return [...doc.querySelectorAll('a[href]')].map(a => {
-        const url = new URL(a.getAttribute('href'), u).href, name = decodeURIComponent(a.textContent.trim() || url.split('/').filter(Boolean).pop() || '');
-        return { name, url, dir: a.getAttribute('href').endsWith('/') }
-      }).filter(x => x.name && x.name !== '..' && x.name !== 'Parent Directory')
-    }
     async function directPlaylist(u) {
       const item = catalog.find(x => x.url === u);
       if (!item || !item.files) throw new Error('This title has not been enriched yet.');
@@ -153,13 +145,7 @@
       const c = cur = { url: x.url, mode: 'direct', offset: 0, dur: 0, a: 0, sub: '', ext: ext || [], info: null };
       $('#cv').checked = false; pl.hidden = false; msg('Playing original media URL...'); fillTracks(); pl.scrollIntoView({ block: 'nearest' });
       const t = +lsGet('dfp:' + x.url) || 0; playAt(t);
-      const info = await fetch('/api/probe?u=' + enc(x.url)).then(r => r.ok ? r.json() : null).catch(() => null);
-      if (cur !== c) return; c.info = info;
-      if (info) {
-        c.dur = info.duration; const a = info.audio[0];
-        if (!(OKC.test(x.name) && OKV.test(info.video) && (!a || OKA.test(a.codec)))) { c.mode = 'audio'; $('#cv').checked = info.video !== 'h264'; playAt(t) }
-      }
-      fillTracks(); if (!info) msg('Playing the original media URL. Track details are unavailable.');
+      fillTracks(); msg('Playing the original media URL. Audio and subtitle selection depends on browser support.');
     }
     let wd; function watch() { // if a file plays but no sound is decoded, switch to the server-converted stream
       clearTimeout(wd); const c = cur, m = c.mode;
