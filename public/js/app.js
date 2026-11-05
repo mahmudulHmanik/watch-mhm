@@ -82,11 +82,8 @@
       }).filter(x => x.name && x.name !== '..' && x.name !== 'Parent Directory')
     }
     async function directPlaylist(u) {
-      const root = await directDir(u), dirs = root.filter(x => x.dir), video = x => /\.(mkv|mp4|m4v|avi|webm|mov|ts)$/i.test(x.name);
-      const make = (name, list) => ({ name, videos: list.filter(x => !x.dir && video(x)).map(x => ({ name: x.name, url: x.url, size: '' })) });
-      const groups = [make('', root)];
-      for (const d of dirs) groups.push(make(d.name, await directDir(d.url).catch(() => [])));
-      return { groups: groups.filter(g => g.videos.length) }
+      const r = await fetch('/api/playlist?u=' + enc(u)); if (!r.ok) throw new Error('playlist ' + r.status);
+      return r.json()
     }
     function route() {
       const q = new URLSearchParams(location.hash.slice(1)), u = q.get('w'); stop(); wtok++; closeNav();
@@ -151,7 +148,7 @@
     async function start(x, ext) { // plays directly when the browser can handle the file, otherwise the server converts what is needed
       const c = cur = { url: x.url, mode: 'direct', offset: 0, dur: 0, a: 0, sub: '', ext: ext || [], info: null };
       $('#cv').checked = false; pl.hidden = false; msg('Preparing...'); fillTracks(); pl.scrollIntoView({ block: 'nearest' });
-      const info = null;
+      const info = await fetch('/api/probe?u=' + enc(x.url)).then(r => r.ok ? r.json() : null).catch(() => null);
       if (cur !== c) return; c.info = info; msg('');
       if (info) {
         c.dur = info.duration; const a = info.audio[0];

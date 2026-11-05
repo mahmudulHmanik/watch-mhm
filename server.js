@@ -83,6 +83,7 @@ if (fs.existsSync(IDX)) {
 } else crawl();
 
 const app = express(); app.use(express.static(path.join(__dirname, 'public')));
+app.get('/index.json', (_, r) => r.sendFile(IDX));
 app.get('/api/status', (_, r) => r.json({ crawling, total: items.length }));
 app.post('/api/crawl', (q, r) => {
   if (IS_VERCEL) return r.status(501).json({ error: 'Rescanning is unavailable on Vercel.' });
